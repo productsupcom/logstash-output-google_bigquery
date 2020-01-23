@@ -76,9 +76,12 @@ class LogStash::Outputs::GoogleBigQuery < LogStash::Outputs::Base
   # The BigQuery dataset the tables for the events will be added to.
   config :dataset, validate: :string, required: true
 
-  # BigQuery table ID prefix to be used when creating new tables for log data.
-  # Table name will be `<table_prefix><table_separator><date>`
+  # bigquery table id prefix to be used when creating new tables for log data.
+  # table name will be `<table_prefix><table_separator><table_suffix>`
   config :table_prefix, validate: :string, default: 'logstash'
+
+  # bigquery table suffix to be used when creating new tables for log data
+  config :table_suffix, validate: :string, required: true
 
   # BigQuery table separator to be added between the table_prefix and the
   # date suffix.
@@ -135,7 +138,7 @@ class LogStash::Outputs::GoogleBigQuery < LogStash::Outputs::Base
 
   # Time pattern for BigQuery table, defaults to hourly tables.
   # Must Time.strftime patterns: www.ruby-doc.org/core-2.0/Time.html#method-i-strftime
-  config :date_pattern, validate: :string, default: '%Y-%m-%dT%H:00'
+  #config :date_pattern, validate: :string, default: '%Y-%m-%dT%H:00'
 
   # If logstash is running within Google Compute Engine, the plugin will use
   # GCE's Application Default Credentials. Outside of GCE, you will need to
@@ -192,6 +195,8 @@ class LogStash::Outputs::GoogleBigQuery < LogStash::Outputs::Base
   def receive(event)
     @logger.debug('BQ: receive method called', event: event)
 
+    @table_suffix = event.sprintf(@table_suffix)
+
     # Property names MUST NOT have @ in them
     message = replace_at_keys event.to_hash
 
@@ -204,12 +209,12 @@ class LogStash::Outputs::GoogleBigQuery < LogStash::Outputs::Base
   def get_table_name(time=nil)
     time ||= Time.now
 
-    str_time = time.strftime(@date_pattern)
-    table_id = @table_prefix + @table_separator + str_time
+    table_id = @table_prefix + @table_separator + @table_suffix
 
     # BQ does not accept anything other than alphanumeric and _
     # Ref: https://developers.google.com/bigquery/browser-tool-quickstart?hl=en
     table_id.tr!(':-', '_')
+    @logger.debug('Table id:', table_id: table_id)
 
     table_id
   end
@@ -297,3 +302,4 @@ class LogStash::Outputs::GoogleBigQuery < LogStash::Outputs::Base
     @batcher.enqueue(nil) { |batch| publish(batch) }
   end
 end
+
